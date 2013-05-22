@@ -1,4 +1,4 @@
-astar
+astar module
 =====
 
-A* word transition
+A* word transition example
