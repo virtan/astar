@@ -1,0 +1,4 @@
+astar
+=====
+
+A* word transition
