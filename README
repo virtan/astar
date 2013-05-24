@@ -1,0 +1,41 @@
+Two A* implementation (different parallelization)
+=====
+
+A* with parallelization word transition examples
+http://en.wikipedia.org/wiki/A*
+
+Initial task was:
+
+> Given two five letter words, A and B, and a dictionary of five letter words,
+> find a shortest transformation from A to B, such that only one letter can be
+> changed at a time and all intermediate words in the transformation must exist
+> in the dictionary. 
+
+> For example, if A and B are "smart" and "brain", the result may be:
+> smart
+>   start
+>   stark
+>   stack
+>   slack
+>   black
+>   blank
+>   bland
+>   brand
+>   braid
+> brain
+
+> Your implementation should take advantage of multiple CPU cores.
+> Please also include test cases against your algorithm.
+
+First implementation (astar module) checks one node at time, paralellising
+neighbors checking.
+Second implementation (astar_pv module) checks N (8 by default) nodes at
+time.
+
+Second implementation works 180% faster than first. Paths returned are not
+identical but of same length.
+
+It is possible to speed up implementations using "bounded relaxation"
+technique. http://en.wikipedia.org/wiki/A*#Bounded_relaxation
+For example, multiplying cost_estimate() result by factor of 2 speeds up
+this algorithm by 150%. But the path founded could be not the shortest one.
