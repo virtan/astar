@@ -8,6 +8,12 @@
 
 -record(vertex, {value, score = 0, estimate, weight, path = []}).
 
+read_concurrency() ->
+    case erlang:system_info(compat_rel) > 14 of
+        true -> [{read_concurrency, true}];
+        false -> []
+    end.
+
 list2dict(List) ->
     Dict = ets:new(unnamed, [set, protected, {read_concurrency, true}]),
     ets:insert(Dict, [{X} || X <- List]),
@@ -15,8 +21,8 @@ list2dict(List) ->
 
 path(From, From, _Dict) -> [];
 path(From, To, Dict) ->
-    ClosedSet = ets:new(unnamed, [set, {keypos, 2}, protected, {read_concurrency, true}]),
-    OpenSet = ets:new(unnamed, [set, {keypos, 2}, protected, {read_concurrency, true}]),
+    ClosedSet = ets:new(unnamed, [set, {keypos, 2}, protected] ++ read_concurrency()),
+    OpenSet = ets:new(unnamed, [set, {keypos, 2}, protected] ++ read_concurrency()),
     OpenOSet = ets:new(unnamed, [ordered_set, private]),
     CostEstimate = cost_estimate(From, To),
     Start = #vertex{value = From, estimate = CostEstimate, weight = CostEstimate},
@@ -117,7 +123,7 @@ pmap(F, [El | List], N, sending, Boss) ->
     pmap(F, List, N + 1, sending, Boss).
 
 test_dict_initial() ->
-    Dict = ets:new(unnamed, [set, protected, {read_concurrency, true}]),
+    Dict = ets:new(unnamed, [set, protected] ++ read_concurrency()),
     ets:insert(Dict, [{"start"}, {"stark"}, {"stack"}, {"slack"}, {"bluck"}, {"black"},
             {"blank"}, {"bland"}, {"aland"}, {"cland"}, {"brand"}, {"braid"}]),
     Dict.
@@ -126,7 +132,7 @@ test_path_initial() ->
     io:format("~p~n", [path("smart", "brain", test_dict_initial())]).
 
 test_dict_nopath() ->
-    Dict = ets:new(unnamed, [set, protected, {read_concurrency, true}]),
+    Dict = ets:new(unnamed, [set, protected] ++ read_concurrency()),
     ets:insert(Dict, [{"start"}, {"stark"}, {"stack"}, {"slack"}, {"eluck"}, {"elack"},
             {"blank"}, {"bland"}, {"aland"}, {"cland"}, {"brand"}, {"braid"}]),
     Dict.
