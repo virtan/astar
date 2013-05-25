@@ -39,3 +39,5 @@ It is possible to speed up implementations using "bounded relaxation"
 technique. http://en.wikipedia.org/wiki/A*#Bounded_relaxation
 For example, multiplying cost_estimate() result by factor of 2 speeds up
 this algorithm by 150%. But the path founded could be not the shortest one.
+
+Bonus: C++11 single-thread version
