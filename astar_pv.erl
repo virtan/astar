@@ -11,7 +11,7 @@
 
 -record(vertex, {value, score = 0, estimate, weight, path = []}).
 
--define(PARALLEL, 2).
+-define(PARALLEL, 8).
 
 read_concurrency() ->
     case erlang:system_info(compat_rel) > 14 of
