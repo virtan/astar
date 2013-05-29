@@ -6,7 +6,8 @@
          test_dict_n/1, test_path_big/0,
          test_dict_diff1/1, test_path_longpath/0,
          test_path_speed_comparison/0,
-         test_path_multiprocessor_bad/0
+         test_path_multiprocessor_bad/0,
+         test_path_compare/0
      ]).
 
 -record(vertex, {value, score = 0, estimate, weight, path = []}).
@@ -201,3 +202,17 @@ test_path_multiprocessor_bad() ->
     Res = path("bbbbb", "zaaaz", Dict),
     io:format("comparing ~p and~n          ~p~n~p~n", [["bbbbb","zbbbb","zbabb","zcabb","zcaab","zcaaz","zaaaz"],
             Res, ["bbbbb","zbbbb","zbabb","zcabb","zcaab","zcaaz","zaaaz"] == Res]).
+
+test_path_compare() ->
+    N = 500000,
+    List = test_dict_n(N),
+    Dict = list2dict(List),
+    FromTos = [test_dict_n(2) || _ <- lists:seq(1, 100)],
+    [fun() ->
+                Res1 = astar:path(From, To, Dict),
+                Res2 = astar_pv:path(From, To, Dict),
+                io:format("~p for ~p -> ~p~n", [Res1 == Res2, From, To])
+        end() || [From, To] <- FromTos],
+    done.
+
+
