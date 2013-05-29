@@ -11,7 +11,7 @@
 
 -record(vertex, {value, score = 0, estimate, weight, path = []}).
 
--define(PARALLEL, 8).
+-define(PARALLEL, 2).
 
 read_concurrency() ->
     case erlang:system_info(compat_rel) > 14 of
@@ -38,7 +38,7 @@ path(From, To, Dict) ->
     Result.
 
 find_path(To, OpenSet, OpenOSet, Dict) ->
-    case ets:info(OpenSet, size) of
+    case ets:info(OpenOSet, size) of
         0 -> no_path;
         _ ->
             case ets:first(OpenOSet) of
@@ -60,7 +60,7 @@ take_top_vertex(OpenSet, OpenOSet) ->
                 [X] = ets:lookup(OpenSet, XV),
                 ets:delete(OpenOSet, OSXV),
                 [{XV, X} | A]
-        end, [], lists:seq(1, min(?PARALLEL, ets:info(OpenSet, size)))).
+        end, [], lists:seq(1, min(?PARALLEL, ets:info(OpenOSet, size)))).
 
 process_vertex({XV, X}, Dict, To, OpenSet, MainCycle) ->
     lists:map(fun(YV) ->
@@ -89,7 +89,7 @@ add_new_vertexes(OpenSet, OpenOSet) ->
             end,
             case Better of
                 true ->
-                    ets:insert(OpenSet, Y),
+                    ets:insert(OpenSet, Y), % replace
                     ets:delete(OpenOSet, {OldWeight, Y#vertex.value}),
                     ets:insert(OpenOSet, weightify(Y));
                 _ -> skip

@@ -15,7 +15,7 @@ read_concurrency() ->
     end.
 
 list2dict(List) ->
-    Dict = ets:new(unnamed, [set, protected, {read_concurrency, true}]),
+    Dict = ets:new(unnamed, [set, protected] ++ read_concurrency()),
     ets:insert(Dict, [{X} || X <- List]),
     Dict.
 
@@ -61,10 +61,7 @@ find_path(To, ClosedSet, OpenSet, OpenOSet, Dict) ->
                                                     case Better of
                                                         true ->
                                                             CostEstimate = cost_estimate(YV, To),
-                                                            Weight = case CostEstimate of
-                                                                0 -> 0;
-                                                                _ -> Score + CostEstimate
-                                                            end,
+                                                            Weight = Score + CostEstimate,
                                                             Y = #vertex{value = YV, score = Score, estimate = CostEstimate,
                                                                 weight = Weight, path = [XV | X#vertex.path]},
                                                             MainCycle ! {better_vertex, Y};
