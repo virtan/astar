@@ -5,12 +5,13 @@
          test_dict_nopath/0, test_path_nopath/0,
          test_dict_n/1, test_path_big/0,
          test_dict_diff1/1, test_path_longpath/0,
-         test_path_speed_comparison/0
+         test_path_speed_comparison/0,
+         test_path_multiprocessor_bad/0
      ]).
 
 -record(vertex, {value, score = 0, estimate, weight, path = []}).
 
--define(PARALLEL, 8).
+-define(PARALLEL, 2).
 
 read_concurrency() ->
     case erlang:system_info(compat_rel) > 14 of
@@ -25,20 +26,18 @@ list2dict(List) ->
 
 path(From, From, _Dict) -> [];
 path(From, To, Dict) ->
-    ClosedSet = ets:new(unnamed, [set, {keypos, 2}, protected] ++ read_concurrency()),
     OpenSet = ets:new(unnamed, [set, {keypos, 2}, protected] ++ read_concurrency()),
     OpenOSet = ets:new(unnamed, [ordered_set, private]),
     CostEstimate = cost_estimate(From, To),
     Start = #vertex{value = From, estimate = CostEstimate, weight = CostEstimate},
     ets:insert(OpenSet, Start),
     ets:insert(OpenOSet, weightify(Start)),
-    Result = find_path(To, ClosedSet, OpenSet, OpenOSet, Dict),
+    Result = find_path(To, OpenSet, OpenOSet, Dict),
     ets:delete(OpenOSet),
     ets:delete(OpenSet),
-    ets:delete(ClosedSet),
     Result.
 
-find_path(To, ClosedSet, OpenSet, OpenOSet, Dict) ->
+find_path(To, OpenSet, OpenOSet, Dict) ->
     case ets:info(OpenSet, size) of
         0 -> no_path;
         _ ->
@@ -48,45 +47,36 @@ find_path(To, ClosedSet, OpenSet, OpenOSet, Dict) ->
                     lists:reverse([To | X#vertex.path]);
                 _ ->
                     MainCycle = self(),
-                    pmap(fun(V) -> process_vertex(V, Dict, To, ClosedSet, OpenSet, MainCycle) end,
-                        take_top_vertex(OpenSet, OpenOSet, ClosedSet)),
+                    pmap(fun(V) -> process_vertex(V, Dict, To, OpenSet, MainCycle) end,
+                        take_top_vertex(OpenSet, OpenOSet)),
                     add_new_vertexes(OpenSet, OpenOSet),
-                    find_path(To, ClosedSet, OpenSet, OpenOSet, Dict)
+                    find_path(To, OpenSet, OpenOSet, Dict)
             end
     end.
 
-take_top_vertex(OpenSet, OpenOSet, ClosedSet) ->
+take_top_vertex(OpenSet, OpenOSet) ->
     lists:foldl(fun(_, A) ->
-                {_, XV} = OSXV = ets:first(OpenOSet),
+                {_Weight, XV} = OSXV = ets:first(OpenOSet),
                 [X] = ets:lookup(OpenSet, XV),
-                ets:insert(ClosedSet, X),
                 ets:delete(OpenOSet, OSXV),
-                ets:delete(OpenSet, XV),
                 [{XV, X} | A]
         end, [], lists:seq(1, min(?PARALLEL, ets:info(OpenSet, size)))).
 
-process_vertex({XV, X}, Dict, To, ClosedSet, OpenSet, MainCycle) ->
+process_vertex({XV, X}, Dict, To, OpenSet, MainCycle) ->
     lists:map(fun(YV) ->
-                case ets:member(ClosedSet, YV) of
-                    true -> skip;
-                    false ->
-                        Score = X#vertex.score + 1,
-                        Better = case ets:lookup(OpenSet, YV) of
-                            [] -> true;
-                            [Y1] -> Score < Y1#vertex.score
-                        end,
-                        case Better of
-                            true ->
-                                CostEstimate = cost_estimate(YV, To),
-                                Weight = case CostEstimate of
-                                    0 -> 0;
-                                    _ -> Score + CostEstimate
-                                end,
-                                Y = #vertex{value = YV, score = Score, estimate = CostEstimate,
-                                    weight = Weight, path = [XV | X#vertex.path]},
-                                MainCycle ! {better_vertex, Y};
-                            _ -> skip
-                        end
+                Score = X#vertex.score + 1,
+                Better = case ets:lookup(OpenSet, YV) of
+                    [] -> true;
+                    [Y1] -> Score < Y1#vertex.score
+                end,
+                case Better of
+                    true ->
+                        CostEstimate = cost_estimate(YV, To),
+                        Weight = Score + CostEstimate,
+                        Y = #vertex{value = YV, score = Score, estimate = CostEstimate,
+                            weight = Weight, path = [XV | X#vertex.path]},
+                        MainCycle ! {better_vertex, Y};
+                    _ -> skip
                 end
         end, neighbors(XV, Dict, To)).
 
@@ -204,3 +194,10 @@ test_path_speed_comparison() ->
     io:format("Equality: ~p, speed ~.3f vs ~.3f (~p% speedup)~n~p~n~p~n",
         [Res1 == Res2, Time1, Time2, Time1 * 100 / Time2, Res1, Res2]),
     done.
+
+test_path_multiprocessor_bad() ->
+    Dict = list2dict(["bbbbb", "babbb", "baabb", "zaabb", "bbbab", "bbbaz", "bbaaz", "zbbbb",
+            "zbabb", "zcabb", "zcaab", "zcaaz", "zaaaz"]),
+    Res = path("bbbbb", "zaaaz", Dict),
+    io:format("comparing ~p and~n          ~p~n~p~n", [["bbbbb","zbbbb","zbabb","zcabb","zcaab","zcaaz","zaaaz"],
+            Res, ["bbbbb","zbbbb","zbabb","zcabb","zcaab","zcaaz","zaaaz"] == Res]).
