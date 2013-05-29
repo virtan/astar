@@ -12,7 +12,7 @@
 
 -record(vertex, {value, score = 0, estimate, weight, path = []}).
 
--define(PARALLEL, 2).
+-define(PARALLEL, 8).
 
 read_concurrency() ->
     case erlang:system_info(compat_rel) > 14 of
@@ -49,18 +49,23 @@ find_path(To, OpenSet, OpenOSet, Dict) ->
                 _ ->
                     MainCycle = self(),
                     pmap(fun(V) -> process_vertex(V, Dict, To, OpenSet, MainCycle) end,
-                        take_top_vertex(OpenSet, OpenOSet)),
+                        take_top_vertex(OpenSet, OpenOSet, To)),
                     add_new_vertexes(OpenSet, OpenOSet),
                     find_path(To, OpenSet, OpenOSet, Dict)
             end
     end.
 
-take_top_vertex(OpenSet, OpenOSet) ->
+take_top_vertex(OpenSet, OpenOSet, To) ->
     lists:foldl(fun(_, A) ->
                 {_Weight, XV} = OSXV = ets:first(OpenOSet),
-                [X] = ets:lookup(OpenSet, XV),
-                ets:delete(OpenOSet, OSXV),
-                [{XV, X} | A]
+                case XV == To of
+                    false ->
+                        [X] = ets:lookup(OpenSet, XV),
+                        ets:delete(OpenOSet, OSXV),
+                        [{XV, X} | A];
+                    _ ->
+                        A
+                end
         end, [], lists:seq(1, min(?PARALLEL, ets:info(OpenOSet, size)))).
 
 process_vertex({XV, X}, Dict, To, OpenSet, MainCycle) ->
@@ -192,8 +197,8 @@ test_path_speed_comparison() ->
     {Megasecs3, Secs3, Microsecs3} = now(),
     Time1 = (Megasecs2 * 1000000 + Secs2 + Microsecs2 / 1000000 - Megasecs1 * 1000000 - Secs1 - Microsecs1 / 1000000),
     Time2 = (Megasecs3 * 1000000 + Secs3 + Microsecs3 / 1000000 - Megasecs2 * 1000000 - Secs2 - Microsecs2 / 1000000),
-    io:format("Equality: ~p, speed ~.3f vs ~.3f (~p% speedup)~n~p~n~p~n",
-        [Res1 == Res2, Time1, Time2, Time1 * 100 / Time2, Res1, Res2]),
+    io:format("Length equality: ~p, speed ~.3f vs ~.3f (~p% speedup)~n",
+        [Res1 == Res2, Time1, Time2, Time1 * 100 / Time2]),
     done.
 
 test_path_multiprocessor_bad() ->
@@ -211,7 +216,9 @@ test_path_compare() ->
     [fun() ->
                 Res1 = astar:path(From, To, Dict),
                 Res2 = astar_pv:path(From, To, Dict),
-                io:format("~p for ~p -> ~p~n", [Res1 == Res2, From, To])
+                io:format("content: ~p, length: ~p for ~p -> ~p~n", [Res1 == Res2,
+                        (Res1 == no_path andalso Res2 == no_path) orelse length(Res1) == length(Res2),
+                        From, To])
         end() || [From, To] <- FromTos],
     done.
 
